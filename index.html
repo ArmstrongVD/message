@@ -1,46 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-    <style>
-        .row{
-            margin-top: 25vh;;
-        }
-        h1{
-            margin-top: 0;
-        }
-    </style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Message</title>
+    <meta name="description" content="Create and share secret encrypted messages via a shareable link. No accounts, no servers — just client-side AES-GCM encryption.">
+    <title>Secret Message</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="row">
-            <div class="col s8 offset-s2">
-                <div id="message-show" class="card-panel hide">
-                    <h1></h1>
-                    <div>
-                        <a   href="./index.html">Create your own secret message</a>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
+        <span class="icon-sun" aria-hidden="true">&#9728;</span>
+        <span class="icon-moon" aria-hidden="true">&#9790;</span>
+    </button>
+    <main class="container">
+        <h1 class="app-title">Secret Message</h1>
+
+        <noscript>
+            <p class="notice notice--error">JavaScript is required to create and view encrypted messages.</p>
+        </noscript>
+
+        <!-- Browser compatibility notice (shown by JS if Web Crypto unavailable) -->
+        <div id="compat-notice" class="notice notice--error hidden" role="alert">
+            A modern browser is required to use this app. Please update your browser.
+        </div>
+
+        <!-- ARIA live region for status announcements -->
+        <div id="status-announcer" class="sr-only" role="status" aria-live="polite"></div>
+
+        <!-- PIN Gate view -->
+        <section id="pin-gate-view" class="card hidden">
+            <h2>Enter PIN</h2>
+            <form id="pin-gate-form">
+                <div class="form-group">
+                    <label for="pin-input">PIN</label>
+                    <input type="password" id="pin-input" autocomplete="off" required minlength="4">
+                    <p id="pin-error" class="error-message hidden" role="alert" aria-live="assertive"></p>
+                </div>
+                <button type="submit" class="btn btn--primary">Unlock</button>
+            </form>
+        </section>
+
+        <!-- Message creation view -->
+        <section id="create-view" class="card hidden">
+            <h2>Create a Secret Message</h2>
+            <form id="create-form">
+                <div class="form-group">
+                    <label for="message-input">Your message</label>
+                    <textarea id="message-input" rows="4" maxlength="10000" required aria-describedby="char-count message-error"></textarea>
+                    <span id="char-count" class="char-count">0 / 10,000</span>
+                    <p id="message-error" class="error-message hidden" role="alert" aria-live="assertive"></p>
+                </div>
+                <div class="form-group">
+                    <label for="create-passphrase">Passphrase</label>
+                    <input type="password" id="create-passphrase" required aria-describedby="passphrase-error">
+                    <p id="passphrase-error" class="error-message hidden" role="alert" aria-live="assertive"></p>
+                </div>
+                <div class="form-group">
+                    <label for="expiry-select">Message expiry</label>
+                    <select id="expiry-select">
+                        <option value="">No expiry</option>
+                        <option value="300000">5 minutes</option>
+                        <option value="3600000">1 hour</option>
+                        <option value="86400000">24 hours</option>
+                        <option value="604800000">7 days</option>
+                    </select>
+                </div>
+                <div class="form-group form-group--inline">
+                    <input type="checkbox" id="view-once-check">
+                    <label for="view-once-check">View once (self-destruct after reading)</label>
+                </div>
+                <button type="submit" class="btn btn--primary">Encrypt &amp; Create Link</button>
+            </form>
+
+            <!-- Settings toggle -->
+            <details class="settings-panel">
+                <summary>Settings</summary>
+                <div class="settings-content">
+                    <div id="pin-setup-section">
+                        <h3>PIN Gate</h3>
+                        <p class="settings-description">Set an optional PIN to protect access to message creation on this device.</p>
+                        <div id="pin-not-set" class="hidden">
+                            <form id="pin-setup-form">
+                                <div class="form-group">
+                                    <label for="new-pin-input">New PIN (min 4 characters)</label>
+                                    <input type="password" id="new-pin-input" minlength="4" required>
+                                    <p id="pin-setup-error" class="error-message hidden" role="alert" aria-live="assertive"></p>
+                                </div>
+                                <button type="submit" class="btn btn--secondary">Set PIN</button>
+                            </form>
+                        </div>
+                        <div id="pin-is-set" class="hidden">
+                            <p>PIN gate is <strong>enabled</strong>.</p>
+                            <button type="button" id="disable-pin-btn" class="btn btn--secondary">Disable PIN</button>
+                        </div>
                     </div>
                 </div>
-                <h5>Secret Message</h5>
-                <p id="message-text"></p>
-            <div id="message-form" class="card-panel ">
-               <form>
-                <label>Enter a secret message</label>
-                   <label for="message-input"></label><input id="message-input" />
-                <button class="btn">Create</button>
-            </form> 
-            </div>
-            <div  id="link-form" class="card-panel hide">
-                <div>
-                    Share this link with a friend
-                    <input  id="link-input"/>
-                </div>
-            </div>
+            </details>
+        </section>
 
-        </div>
-    </div>
+        <!-- Link output view -->
+        <section id="link-view" class="card hidden">
+            <h2>Your Secret Link</h2>
+            <p>Share this link with your recipient. They will need the passphrase to read the message.</p>
+            <div class="form-group">
+                <label for="link-output">Shareable link</label>
+                <input type="text" id="link-output" readonly>
+            </div>
+            <button type="button" id="copy-link-btn" class="btn btn--primary">Copy Link</button>
+            <p id="copy-feedback" class="success-message hidden"></p>
+            <a href="./index.html" class="link-back">Create another message</a>
+        </section>
+
+        <!-- Decrypt / message viewing view -->
+        <section id="decrypt-view" class="card hidden">
+            <h2>You have a secret message</h2>
+            <form id="decrypt-form">
+                <div class="form-group">
+                    <label for="decrypt-passphrase">Enter the passphrase</label>
+                    <input type="password" id="decrypt-passphrase" required aria-describedby="decrypt-error">
+                    <p id="decrypt-error" class="error-message hidden" role="alert" aria-live="assertive"></p>
+                </div>
+                <button type="submit" class="btn btn--primary">Decrypt</button>
+            </form>
+        </section>
+
+        <!-- Decrypted message display -->
+        <section id="message-display" class="card hidden">
+            <h2>Secret Message</h2>
+            <div id="decrypted-content" class="message-content"></div>
+            <p id="message-meta" class="message-meta hidden"></p>
+            <a href="./index.html" class="link-back">Create your own secret message</a>
+        </section>
+
+        <!-- Expired / viewed notice -->
+        <section id="notice-view" class="card hidden">
+            <h2 id="notice-title"></h2>
+            <p id="notice-text"></p>
+            <a href="./index.html" class="link-back">Create your own secret message</a>
+        </section>
+
+    </main>
+    <script src="crypto.js"></script>
+    <script src="pin-gate.js"></script>
     <script src="index.js"></script>
 </body>
 </html>
